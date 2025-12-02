@@ -1,0 +1,12 @@
+{
+  "name": "lambda-runner-js-worker",
+  "version": "1.0.0",
+  "description": "JavaScript worker for Lambda Runner",
+  "main": "worker.js",
+  "scripts": {
+    "start": "node worker.js"
+  },
+  "dependencies": {
+    "redis": "^4.6.0"
+  }
+}

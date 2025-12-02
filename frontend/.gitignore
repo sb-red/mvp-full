@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Build
+dist/
+build/
+
+# Cache
+.vite/
+*.tsbuildinfo
+
+# IDE
+.idea/
+*.iml
