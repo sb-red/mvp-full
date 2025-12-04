@@ -58,4 +58,15 @@ export const api = {
     if (!res.ok) throw new Error('Failed to fetch invocations');
     return res.json();
   },
+
+  // Delete a function
+  async deleteFunction(id: number): Promise<void> {
+    const res = await fetch(`${API_BASE}/functions/${id}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || 'Failed to delete function');
+    }
+  },
 };

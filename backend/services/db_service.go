@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"time"
 
-	_ "github.com/lib/pq"
 	"lambda-runner-server/models"
+
+	_ "github.com/lib/pq"
 )
 
 type DBService struct {
@@ -189,6 +190,24 @@ func (s *DBService) UpdateCodeKey(ctx context.Context, id int64, codeKey string)
 		UPDATE functions SET code_s3_key = $2, updated_at = now() WHERE id = $1
 	`, id, codeKey)
 	return err
+}
+
+// DeleteFunction removes a function record (cascades to params/invocations)
+func (s *DBService) DeleteFunction(ctx context.Context, id int64) (*models.Function, error) {
+	fn, err := s.GetFunction(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if fn == nil {
+		return nil, nil
+	}
+
+	_, err = s.db.ExecContext(ctx, `DELETE FROM functions WHERE id = $1`, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return fn, nil
 }
 
 // ListFunctions returns all functions (without code)

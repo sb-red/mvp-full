@@ -49,8 +49,12 @@ services:
       - DB_USER=softgate
       - DB_PASSWORD=softgate
       - DB_NAME=softgate
-      - STORAGE_TYPE=local
-      - STORAGE_PATH=/data/code
+      - STORAGE_TYPE=s3
+      - STORAGE_BUCKET=jeonjunbae
+      - AWS_REGION=ap-northeast-2
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - STORAGE_PATH=softgate-functions
     volumes:
       - code_storage:/data/code
     networks:

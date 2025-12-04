@@ -234,3 +234,33 @@ func (h *FunctionHandler) ListInvocations(c *fiber.Ctx) error {
 
 	return c.JSON(invocations)
 }
+
+// DeleteFunction godoc
+// @Summary Delete a function
+// @Description Delete a function and remove its stored code
+// @Tags functions
+// @Produce json
+// @Param id path int true "Function ID"
+// @Success 200 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Router /functions/{id} [delete]
+func (h *FunctionHandler) DeleteFunction(c *fiber.Ctx) error {
+	idStr := c.Params("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid function ID",
+		})
+	}
+
+	_, err = h.service.DeleteFunction(c.Context(), id)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "Function deleted successfully",
+	})
+}

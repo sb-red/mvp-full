@@ -1,0 +1,317 @@
+basePath: /api
+definitions:
+  models.CreateFunctionRequest:
+    properties:
+      code:
+        type: string
+      description:
+        type: string
+      name:
+        type: string
+      params:
+        items:
+          $ref: '#/definitions/models.FunctionParam'
+        type: array
+      runtime:
+        type: string
+      sample_event:
+        additionalProperties: true
+        type: object
+    type: object
+  models.Function:
+    properties:
+      code:
+        type: string
+      code_s3_key:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      is_public:
+        type: boolean
+      name:
+        type: string
+      params:
+        items:
+          $ref: '#/definitions/models.FunctionParam'
+        type: array
+      runtime:
+        type: string
+      sample_event:
+        additionalProperties: true
+        type: object
+      updated_at:
+        type: string
+    type: object
+  models.FunctionListItem:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      runtime:
+        type: string
+    type: object
+  models.FunctionParam:
+    properties:
+      default_value:
+        additionalProperties: true
+        type: object
+      description:
+        type: string
+      function_id:
+        type: integer
+      id:
+        type: integer
+      key:
+        type: string
+      required:
+        type: boolean
+      type:
+        type: string
+    type: object
+  models.InvocationListItem:
+    properties:
+      duration_ms:
+        type: integer
+      error_message:
+        type: string
+      function_id:
+        type: integer
+      id:
+        type: integer
+      input_event:
+        additionalProperties: true
+        type: object
+      invoked_at:
+        type: string
+      output_result:
+        additionalProperties: true
+        type: object
+      status:
+        type: string
+    type: object
+  models.InvokeRequest:
+    properties:
+      params:
+        additionalProperties: true
+        type: object
+    type: object
+  models.InvokeResponse:
+    properties:
+      duration_ms:
+        type: integer
+      error_message:
+        type: string
+      function_id:
+        type: integer
+      input_event:
+        additionalProperties: true
+        type: object
+      invocation_id:
+        type: integer
+      logged_at:
+        type: string
+      result:
+        additionalProperties: true
+        type: object
+      status:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: Serverless function execution platform (FaaS) API
+  title: SoftGate API
+  version: "1.0"
+paths:
+  /functions:
+    get:
+      description: Get a list of all registered functions
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.FunctionListItem'
+            type: array
+      summary: List all functions
+      tags:
+      - functions
+    post:
+      consumes:
+      - application/json
+      description: Register a new serverless function with code and parameters
+      parameters:
+      - description: Function to create
+        in: body
+        name: function
+        required: true
+        schema:
+          $ref: '#/definitions/models.CreateFunctionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Function'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create a new function
+      tags:
+      - functions
+  /functions/{id}:
+    delete:
+      description: Delete a function and remove its stored code
+      parameters:
+      - description: Function ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Delete a function
+      tags:
+      - functions
+    get:
+      description: Get detailed information about a specific function
+      parameters:
+      - description: Function ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Function'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get function details
+      tags:
+      - functions
+  /functions/{id}/invocations:
+    get:
+      description: Get execution history for a function
+      parameters:
+      - description: Function ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - default: 20
+        description: Number of results to return
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.InvocationListItem'
+            type: array
+      summary: List function invocations
+      tags:
+      - functions
+  /functions/{id}/invocations/{invocationId}:
+    get:
+      description: Poll for the result of a function invocation
+      parameters:
+      - description: Function ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Invocation ID
+        in: path
+        name: invocationId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.InvokeResponse'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get invocation result
+      tags:
+      - functions
+  /functions/{id}/invoke:
+    post:
+      consumes:
+      - application/json
+      description: Execute a function with given parameters
+      parameters:
+      - description: Function ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Input parameters
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/models.InvokeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.InvokeResponse'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Invoke a function
+      tags:
+      - functions
+swagger: "2.0"

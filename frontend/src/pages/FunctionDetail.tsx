@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import { api } from '../api/lambdaApi';
 import { FunctionDetail as FunctionDetailType, InvokeResponse, InvocationListItem } from '../types';
@@ -21,6 +21,9 @@ export function FunctionDetail() {
   const [invocations, setInvocations] = useState<InvocationListItem[]>([]);
 
   const pollingRef = useRef<number | null>(null);
+  const navigate = useNavigate();
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -129,6 +132,23 @@ export function FunctionDetail() {
     }
   }, [func, id, params]);
 
+  const handleDelete = useCallback(async () => {
+    if (!func) return;
+    const confirmed = window.confirm('이 함수를 삭제할까요? 실행 기록과 코드도 함께 삭제됩니다.');
+    if (!confirmed) return;
+
+    try {
+      setIsDeleting(true);
+      setDeleteError(null);
+      await api.deleteFunction(func.id);
+      navigate('/functions');
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete function');
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [func, navigate]);
+
   const getEditorLanguage = (runtime: string) => {
     if (runtime.includes('python')) return 'python';
     return 'javascript';
@@ -151,12 +171,18 @@ export function FunctionDetail() {
     <div className="function-detail">
       <div className="detail-header">
         <Link to="/functions" className="back-link">&larr; Back to Functions</Link>
-        <div className="header-info">
-          <h1>{func.name}</h1>
-          <span className={`runtime-badge ${func.runtime.includes('python') ? 'python' : 'javascript'}`}>
-            {func.runtime}
-          </span>
+        <div className="header-row">
+          <div className="header-info">
+            <h1>{func.name}</h1>
+            <span className={`runtime-badge ${func.runtime.includes('python') ? 'python' : 'javascript'}`}>
+              {func.runtime}
+            </span>
+          </div>
+          <button className="delete-btn" onClick={handleDelete} disabled={isDeleting}>
+            {isDeleting ? 'Deleting...' : 'Delete'}
+          </button>
         </div>
+        {deleteError && <div className="delete-error">{deleteError}</div>}
         <p className="description">{func.description}</p>
       </div>
 

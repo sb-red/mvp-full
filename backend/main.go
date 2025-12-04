@@ -38,7 +38,7 @@ func main() {
 
 	// Storage Config
 	storageType := getEnv("STORAGE_TYPE", "local")
-	storagePath := getEnv("STORAGE_PATH", "/data/code")
+	storagePath := getEnv("STORAGE_BUCKET", getEnv("STORAGE_PATH", "/data/code"))
 
 	// Initialize services
 	dbService, err := services.NewDBService(dbHost, dbPort, dbUser, dbPassword, dbName)
@@ -101,6 +101,7 @@ func main() {
 	api.Post("/functions/:id/invoke", functionHandler.InvokeFunction)
 	api.Get("/functions/:id/invocations", functionHandler.ListInvocations)
 	api.Get("/functions/:id/invocations/:invocationId", functionHandler.GetInvocationResult)
+	api.Delete("/functions/:id", functionHandler.DeleteFunction)
 
 	log.Printf("SoftGate Server starting on port %s", serverPort)
 	log.Printf("Database: %s:%d/%s", dbHost, dbPort, dbName)

@@ -173,6 +173,25 @@ func (s *FunctionService) ListInvocations(ctx context.Context, functionID int64,
 	return s.db.ListInvocations(ctx, functionID, limit)
 }
 
+// DeleteFunction removes the function and its stored code
+func (s *FunctionService) DeleteFunction(ctx context.Context, id int64) (*models.Function, error) {
+	fn, err := s.db.DeleteFunction(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if fn == nil {
+		return nil, fmt.Errorf("function not found: %d", id)
+	}
+
+	if fn.CodeS3Key != "" {
+		if err := s.storage.DeleteCode(ctx, fn.CodeS3Key); err != nil {
+			return fn, err
+		}
+	}
+
+	return fn, nil
+}
+
 // getQueueName returns the Redis queue name based on runtime
 func getQueueName(runtime string) string {
 	if runtime == "python3.11" || runtime == "python" {
