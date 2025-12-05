@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/aws/aws-xray-sdk-go/xray"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
@@ -13,6 +14,7 @@ import (
 	"github.com/gofiber/swagger"
 
 	"lambda-runner-server/handlers"
+	customMiddleware "lambda-runner-server/middleware"
 	"lambda-runner-server/services"
 
 	_ "lambda-runner-server/docs"
@@ -24,6 +26,12 @@ import (
 // @host localhost:8080
 // @BasePath /api
 func main() {
+	// Initialize X-Ray
+	xray.Configure(xray.Config{
+		DaemonAddr:     getEnv("XRAY_DAEMON_ADDRESS", "127.0.0.1:2000"),
+		ServiceVersion: "1.0.0",
+	})
+
 	// Config
 	redisHost := getEnv("REDIS_HOST", "localhost")
 	redisPort, _ := strconv.Atoi(getEnv("REDIS_PORT", "6379"))
@@ -77,6 +85,7 @@ func main() {
 	// Middleware
 	app.Use(logger.New())
 	app.Use(recover.New())
+	app.Use(customMiddleware.XRayMiddleware()) // X-Ray tracing
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: "*",
 		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
