@@ -2,7 +2,12 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import { api } from '../api/lambdaApi';
-import { FunctionDetail as FunctionDetailType, InvokeResponse, InvocationListItem } from '../types';
+import {
+  FunctionDetail as FunctionDetailType,
+  InvokeResponse,
+  InvocationListItem,
+  FunctionSchedule,
+} from '../types';
 import './FunctionDetail.css';
 
 export function FunctionDetail() {
@@ -19,21 +24,18 @@ export function FunctionDetail() {
 
   // Invocation history
   const [invocations, setInvocations] = useState<InvocationListItem[]>([]);
+  const [schedules, setSchedules] = useState<FunctionSchedule[]>([]);
+  const [scheduleDateTime, setScheduleDateTime] = useState('');
+  const [schedulePayload, setSchedulePayload] = useState('{}');
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const [scheduleSuccess, setScheduleSuccess] = useState<string | null>(null);
+  const [isCreatingSchedule, setIsCreatingSchedule] = useState(false);
+  const [deletingScheduleId, setDeletingScheduleId] = useState<number | null>(null);
 
   const pollingRef = useRef<number | null>(null);
   const navigate = useNavigate();
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (id) {
-      loadFunction(parseInt(id));
-      loadInvocations(parseInt(id));
-    }
-    return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current);
-    };
-  }, [id]);
 
   const loadFunction = async (functionId: number) => {
     try {
@@ -69,6 +71,26 @@ export function FunctionDetail() {
       // Ignore error for invocations
     }
   };
+
+  const loadSchedules = useCallback(async (functionId: number) => {
+    try {
+      const data = await api.listSchedules(functionId);
+      setSchedules(data || []);
+    } catch {
+      setScheduleError('예약 실행 정보를 불러오지 못했습니다.');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (id) {
+      loadFunction(parseInt(id));
+      loadInvocations(parseInt(id));
+      loadSchedules(parseInt(id));
+    }
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [id, loadSchedules]);
 
   const handleParamChange = (key: string, value: string) => {
     setParams((prev) => ({ ...prev, [key]: value }));
@@ -131,6 +153,62 @@ export function FunctionDetail() {
       setIsExecuting(false);
     }
   }, [func, id, params]);
+
+  const handleCreateSchedule = useCallback(async () => {
+    if (!func) return;
+    if (!scheduleDateTime.trim()) {
+      setScheduleError('예약 실행 시간을 입력해주세요.');
+      return;
+    }
+
+    let payloadObj: Record<string, unknown> = {};
+    const payloadText = schedulePayload.trim();
+    if (payloadText) {
+      try {
+        payloadObj = JSON.parse(payloadText);
+      } catch {
+        setScheduleError('Payload는 올바른 JSON 형식이어야 합니다.');
+        return;
+      }
+    }
+
+    try {
+      setIsCreatingSchedule(true);
+      setScheduleError(null);
+      setScheduleSuccess(null);
+      await api.createSchedule(func.id, {
+        scheduled_at: new Date(scheduleDateTime).toISOString(),
+        payload: payloadObj,
+      });
+      setScheduleSuccess('예약 실행이 등록되었습니다.');
+      setScheduleDateTime('');
+      setSchedulePayload('{}');
+      await loadSchedules(func.id);
+    } catch (err) {
+      setScheduleError(err instanceof Error ? err.message : '예약 실행을 등록하지 못했습니다.');
+    } finally {
+      setIsCreatingSchedule(false);
+    }
+  }, [func, scheduleDateTime, schedulePayload, loadSchedules]);
+
+  const handleDeleteSchedule = useCallback(
+    async (scheduleId: number) => {
+      if (!func) return;
+      const confirmed = window.confirm('이 예약 실행을 삭제할까요?');
+      if (!confirmed) return;
+
+      try {
+        setDeletingScheduleId(scheduleId);
+        await api.deleteSchedule(func.id, scheduleId);
+        await loadSchedules(func.id);
+      } catch (err) {
+        setScheduleError(err instanceof Error ? err.message : '예약 실행을 삭제하지 못했습니다.');
+      } finally {
+        setDeletingScheduleId(null);
+      }
+    },
+    [func, loadSchedules]
+  );
 
   const handleDelete = useCallback(async () => {
     if (!func) return;
@@ -249,6 +327,96 @@ export function FunctionDetail() {
                 )}
               </div>
             )}
+          </div>
+
+          <div className="schedule-section">
+            <div className="schedule-header">
+              <div>
+                <h3>Scheduled Invocations</h3>
+                <p className="schedule-subtitle">특정 시간에 함수를 예약 실행할 수 있습니다.</p>
+              </div>
+            </div>
+            <div className="schedule-form">
+              <label>
+                예약 실행 시간 *
+                <input
+                  type="datetime-local"
+                  value={scheduleDateTime}
+                  onChange={(e) => {
+                    setScheduleDateTime(e.target.value);
+                    setScheduleError(null);
+                    setScheduleSuccess(null);
+                  }}
+                />
+                <span className="field-hint">예: 2025-12-06T17:50</span>
+              </label>
+              <label>
+                Payload (JSON)
+                <textarea
+                  rows={4}
+                  value={schedulePayload}
+                  onChange={(e) => {
+                    setSchedulePayload(e.target.value);
+                    setScheduleError(null);
+                    setScheduleSuccess(null);
+                  }}
+                  placeholder='{"message": "hello"}'
+                />
+              </label>
+              {scheduleError && <div className="schedule-error">{scheduleError}</div>}
+              {scheduleSuccess && <div className="schedule-success">{scheduleSuccess}</div>}
+              <button className="schedule-submit" onClick={handleCreateSchedule} disabled={isCreatingSchedule}>
+                {isCreatingSchedule ? 'Saving...' : 'Add Schedule'}
+              </button>
+            </div>
+
+            <div className="schedule-list">
+              {schedules.length === 0 ? (
+                <p className="no-schedules">등록된 예약 실행이 없습니다.</p>
+              ) : (
+                <table className="schedule-table">
+                  <thead>
+                    <tr>
+                      <th>예약 시간</th>
+                      <th>실행 완료</th>
+                      <th>실행 시간</th>
+                      <th>상태</th>
+                      <th>Payload</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {schedules.map((schedule) => (
+                      <tr key={schedule.id}>
+                        <td>{formatDate(schedule.scheduled_at)}</td>
+                        <td>{schedule.executed ? '✓' : '-'}</td>
+                        <td>{schedule.executed_at ? formatDate(schedule.executed_at) : '-'}</td>
+                        <td>
+                          {schedule.status ? (
+                            <span className={`status-badge ${schedule.status}`}>{schedule.status}</span>
+                          ) : (
+                            <span className="status-badge pending">pending</span>
+                          )}
+                          {schedule.error_message && <div className="schedule-error-text">{schedule.error_message}</div>}
+                        </td>
+                        <td>
+                          <code>{JSON.stringify(schedule.payload || {})}</code>
+                        </td>
+                        <td>
+                          <button
+                            className="schedule-delete-btn"
+                            onClick={() => handleDeleteSchedule(schedule.id)}
+                            disabled={deletingScheduleId === schedule.id}
+                          >
+                            {deletingScheduleId === schedule.id ? 'Deleting...' : 'Delete'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
           </div>
         </div>
 
