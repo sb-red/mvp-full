@@ -9,6 +9,7 @@ import (
 
 	"lambda-runner-server/models"
 
+	"github.com/aws/aws-xray-sdk-go/xray"
 	_ "github.com/lib/pq"
 )
 
@@ -101,103 +102,146 @@ func (s *DBService) InitSchema(ctx context.Context) error {
 
 // CreateFunction inserts a new function and its params
 func (s *DBService) CreateFunction(ctx context.Context, fn *models.Function) (*models.Function, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback()
+	var result *models.Function
+	var finalErr error
 
-	sampleEventJSON, _ := json.Marshal(fn.SampleEvent)
-
-	var id int64
-	var createdAt, updatedAt time.Time
-	err = tx.QueryRowContext(ctx, `
-		INSERT INTO functions (name, description, runtime, code_s3_key, sample_event, is_public)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, created_at, updated_at
-	`, fn.Name, fn.Description, fn.Runtime, fn.CodeS3Key, sampleEventJSON, true).Scan(&id, &createdAt, &updatedAt)
-	if err != nil {
-		return nil, err
-	}
-
-	fn.ID = id
-	fn.CreatedAt = createdAt
-	fn.UpdatedAt = updatedAt
-	fn.IsPublic = true
-
-	// Insert params
-	for i := range fn.Params {
-		param := &fn.Params[i]
-		defaultValueJSON, _ := json.Marshal(param.DefaultValue)
-
-		var paramID int64
-		err = tx.QueryRowContext(ctx, `
-			INSERT INTO function_params (function_id, param_key, param_type, is_required, description, default_value)
-			VALUES ($1, $2, $3, $4, $5, $6)
-			RETURNING id
-		`, id, param.ParamKey, param.ParamType, param.IsRequired, param.Description, defaultValueJSON).Scan(&paramID)
+	xray.Capture(ctx, "DB.CreateFunction", func(ctx1 context.Context) error {
+		tx, err := s.db.BeginTx(ctx, nil)
 		if err != nil {
-			return nil, err
+			finalErr = err
+			return err
 		}
-		param.ID = paramID
-		param.FunctionID = id
-	}
+		defer tx.Rollback()
 
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
+		sampleEventJSON, _ := json.Marshal(fn.SampleEvent)
 
-	return fn, nil
+		var id int64
+		var createdAt, updatedAt time.Time
+		err = tx.QueryRowContext(ctx, `
+			INSERT INTO functions (name, description, runtime, code_s3_key, sample_event, is_public)
+			VALUES ($1, $2, $3, $4, $5, $6)
+			RETURNING id, created_at, updated_at
+		`, fn.Name, fn.Description, fn.Runtime, fn.CodeS3Key, sampleEventJSON, true).Scan(&id, &createdAt, &updatedAt)
+		if err != nil {
+			finalErr = err
+			return err
+		}
+
+		fn.ID = id
+		fn.CreatedAt = createdAt
+		fn.UpdatedAt = updatedAt
+		fn.IsPublic = true
+
+		// Insert params
+		for i := range fn.Params {
+			param := &fn.Params[i]
+			defaultValueJSON, _ := json.Marshal(param.DefaultValue)
+
+			var paramID int64
+			err = tx.QueryRowContext(ctx, `
+				INSERT INTO function_params (function_id, param_key, param_type, is_required, description, default_value)
+				VALUES ($1, $2, $3, $4, $5, $6)
+				RETURNING id
+			`, id, param.ParamKey, param.ParamType, param.IsRequired, param.Description, defaultValueJSON).Scan(&paramID)
+			if err != nil {
+				finalErr = err
+				return err
+			}
+			param.ID = paramID
+			param.FunctionID = id
+		}
+
+		if err := tx.Commit(); err != nil {
+			finalErr = err
+			return err
+		}
+
+		result = fn
+		finalErr = nil
+
+		// Add metadata to subsegment
+		if seg := xray.GetSegment(ctx1); seg != nil {
+			seg.AddMetadata("db.operation", "INSERT")
+			seg.AddMetadata("db.table", "functions")
+			seg.AddMetadata("db.function_name", fn.Name)
+		}
+
+		return nil
+	})
+
+	return result, finalErr
 }
 
 // GetFunction retrieves a function by ID with its params
 func (s *DBService) GetFunction(ctx context.Context, id int64) (*models.Function, error) {
-	fn := &models.Function{}
-	var sampleEventJSON []byte
+	var result *models.Function
+	var finalErr error
 
-	err := s.db.QueryRowContext(ctx, `
-		SELECT id, name, description, runtime, code_s3_key, sample_event, is_public, created_at, updated_at
-		FROM functions WHERE id = $1
-	`, id).Scan(&fn.ID, &fn.Name, &fn.Description, &fn.Runtime, &fn.CodeS3Key, &sampleEventJSON, &fn.IsPublic, &fn.CreatedAt, &fn.UpdatedAt)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
+	xray.Capture(ctx, "DB.GetFunction", func(ctx1 context.Context) error {
+		fn := &models.Function{}
+		var sampleEventJSON []byte
 
-	if sampleEventJSON != nil {
-		json.Unmarshal(sampleEventJSON, &fn.SampleEvent)
-	}
-
-	// Get params
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, function_id, param_key, param_type, is_required, description, default_value
-		FROM function_params WHERE function_id = $1
-	`, id)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var param models.FunctionParam
-		var defaultValueJSON []byte
-		var desc sql.NullString
-		err := rows.Scan(&param.ID, &param.FunctionID, &param.ParamKey, &param.ParamType, &param.IsRequired, &desc, &defaultValueJSON)
+		err := s.db.QueryRowContext(ctx, `
+			SELECT id, name, description, runtime, code_s3_key, sample_event, is_public, created_at, updated_at
+			FROM functions WHERE id = $1
+		`, id).Scan(&fn.ID, &fn.Name, &fn.Description, &fn.Runtime, &fn.CodeS3Key, &sampleEventJSON, &fn.IsPublic, &fn.CreatedAt, &fn.UpdatedAt)
+		if err == sql.ErrNoRows {
+			result = nil
+			finalErr = nil
+			return nil
+		}
 		if err != nil {
-			return nil, err
+			finalErr = err
+			return err
 		}
-		if desc.Valid {
-			param.Description = desc.String
-		}
-		if defaultValueJSON != nil {
-			json.Unmarshal(defaultValueJSON, &param.DefaultValue)
-		}
-		fn.Params = append(fn.Params, param)
-	}
 
-	return fn, nil
+		if sampleEventJSON != nil {
+			json.Unmarshal(sampleEventJSON, &fn.SampleEvent)
+		}
+
+		// Get params
+		rows, err := s.db.QueryContext(ctx, `
+			SELECT id, function_id, param_key, param_type, is_required, description, default_value
+			FROM function_params WHERE function_id = $1
+		`, id)
+		if err != nil {
+			finalErr = err
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var param models.FunctionParam
+			var defaultValueJSON []byte
+			var desc sql.NullString
+			err := rows.Scan(&param.ID, &param.FunctionID, &param.ParamKey, &param.ParamType, &param.IsRequired, &desc, &defaultValueJSON)
+			if err != nil {
+				finalErr = err
+				return err
+			}
+			if desc.Valid {
+				param.Description = desc.String
+			}
+			if defaultValueJSON != nil {
+				json.Unmarshal(defaultValueJSON, &param.DefaultValue)
+			}
+			fn.Params = append(fn.Params, param)
+		}
+
+		result = fn
+		finalErr = nil
+
+		// Add metadata to subsegment
+		if seg := xray.GetSegment(ctx1); seg != nil {
+			seg.AddMetadata("db.operation", "SELECT")
+			seg.AddMetadata("db.table", "functions")
+			seg.AddMetadata("db.function_id", id)
+		}
+
+		return nil
+	})
+
+	return result, finalErr
 }
 
 // UpdateCodeKey updates the code_s3_key for a function
@@ -252,37 +296,71 @@ func (s *DBService) ListFunctions(ctx context.Context) ([]models.FunctionListIte
 
 // CreateInvocation creates a new invocation record
 func (s *DBService) CreateInvocation(ctx context.Context, inv *models.Invocation) (*models.Invocation, error) {
-	inputEventJSON, _ := json.Marshal(inv.InputEvent)
+	var result *models.Invocation
+	var finalErr error
 
-	var id int64
-	var invokedAt, createdAt time.Time
-	err := s.db.QueryRowContext(ctx, `
-		INSERT INTO function_invocations (function_id, invoked_by, input_event, status)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id, invoked_at, created_at
-	`, inv.FunctionID, inv.InvokedBy, inputEventJSON, inv.Status).Scan(&id, &invokedAt, &createdAt)
-	if err != nil {
-		return nil, err
-	}
+	xray.Capture(ctx, "DB.CreateInvocation", func(ctx1 context.Context) error {
+		inputEventJSON, _ := json.Marshal(inv.InputEvent)
 
-	inv.ID = id
-	inv.InvokedAt = invokedAt
-	inv.CreatedAt = createdAt
+		var id int64
+		var invokedAt, createdAt time.Time
+		err := s.db.QueryRowContext(ctx, `
+			INSERT INTO function_invocations (function_id, invoked_by, input_event, status)
+			VALUES ($1, $2, $3, $4)
+			RETURNING id, invoked_at, created_at
+		`, inv.FunctionID, inv.InvokedBy, inputEventJSON, inv.Status).Scan(&id, &invokedAt, &createdAt)
+		if err != nil {
+			finalErr = err
+			return err
+		}
 
-	return inv, nil
+		inv.ID = id
+		inv.InvokedAt = invokedAt
+		inv.CreatedAt = createdAt
+
+		result = inv
+		finalErr = nil
+
+		// Add metadata to subsegment
+		if seg := xray.GetSegment(ctx1); seg != nil {
+			seg.AddMetadata("db.operation", "INSERT")
+			seg.AddMetadata("db.table", "function_invocations")
+			seg.AddMetadata("db.function_id", inv.FunctionID)
+		}
+
+		return nil
+	})
+
+	return result, finalErr
 }
 
 // UpdateInvocationResult updates the invocation with execution result
 func (s *DBService) UpdateInvocationResult(ctx context.Context, id int64, status string, outputResult map[string]interface{}, errorMessage string, durationMs int) error {
-	outputJSON, _ := json.Marshal(outputResult)
+	var finalErr error
 
-	_, err := s.db.ExecContext(ctx, `
-		UPDATE function_invocations
-		SET status = $2, output_result = $3, error_message = $4, duration_ms = $5
-		WHERE id = $1
-	`, id, status, outputJSON, errorMessage, durationMs)
+	xray.Capture(ctx, "DB.UpdateInvocationResult", func(ctx1 context.Context) error {
+		outputJSON, _ := json.Marshal(outputResult)
 
-	return err
+		_, err := s.db.ExecContext(ctx, `
+			UPDATE function_invocations
+			SET status = $2, output_result = $3, error_message = $4, duration_ms = $5
+			WHERE id = $1
+		`, id, status, outputJSON, errorMessage, durationMs)
+
+		finalErr = err
+
+		// Add metadata to subsegment
+		if seg := xray.GetSegment(ctx1); seg != nil {
+			seg.AddMetadata("db.operation", "UPDATE")
+			seg.AddMetadata("db.table", "function_invocations")
+			seg.AddMetadata("db.invocation_id", id)
+			seg.AddMetadata("db.status", status)
+		}
+
+		return err
+	})
+
+	return finalErr
 }
 
 // GetInvocation retrieves an invocation by ID

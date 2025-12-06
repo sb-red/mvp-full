@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-xray-sdk-go/instrumentation/awsv2"
 )
 
 // StorageService interface for code file storage
@@ -70,6 +71,9 @@ func NewS3StorageService(bucket string) (*S3StorageService, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Instrument AWS SDK v2 with X-Ray for automatic S3 operation tracing
+	awsv2.AWSV2Instrumentor(&cfg.APIOptions)
 
 	client := s3.NewFromConfig(cfg)
 	return &S3StorageService{client: client, bucket: bucket}, nil
