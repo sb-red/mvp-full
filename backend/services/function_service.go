@@ -194,8 +194,24 @@ func (s *FunctionService) DeleteFunction(ctx context.Context, id int64) (*models
 
 // getQueueName returns the Redis queue name based on runtime
 func getQueueName(runtime string) string {
-	if runtime == "python3.11" || runtime == "python" {
+	switch runtime {
+	case "python3.11", "python":
 		return "execution_queue:python"
+	case "javascript", "node", "nodejs18":
+		return "execution_queue:javascript"
+	case "java11":
+		return "execution_queue:java11"
+	case "java17":
+		return "execution_queue:java17"
+	case "java21":
+		return "execution_queue:java21"
+	case "swift":
+		return "execution_queue:swift"
+	case "kotlin":
+		return "execution_queue:kotlin"
+	case "pypy3":
+		return "execution_queue:pypy3"
+	default:
+		return "execution_queue:python" // default fallback
 	}
-	return "execution_queue:javascript"
 }
