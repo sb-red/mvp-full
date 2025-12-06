@@ -17,7 +17,7 @@ type DBService struct {
 }
 
 func NewDBService(host string, port int, user, password, dbname string) (*DBService, error) {
-	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=require",
 		host, port, user, password, dbname)
 
 	db, err := sql.Open("postgres", connStr)
