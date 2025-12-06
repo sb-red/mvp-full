@@ -4,6 +4,8 @@ import {
   CreateFunctionRequest,
   InvokeResponse,
   InvocationListItem,
+  FunctionSchedule,
+  CreateScheduleRequest,
 } from '../types';
 
 const API_BASE = '/api';
@@ -67,6 +69,38 @@ export const api = {
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.error || 'Failed to delete function');
+    }
+  },
+
+  // List schedules for a function
+  async listSchedules(functionId: number): Promise<FunctionSchedule[]> {
+    const res = await fetch(`${API_BASE}/functions/${functionId}/schedules`);
+    if (!res.ok) throw new Error('Failed to fetch schedules');
+    return res.json();
+  },
+
+  // Create schedule
+  async createSchedule(functionId: number, schedule: CreateScheduleRequest): Promise<FunctionSchedule> {
+    const res = await fetch(`${API_BASE}/functions/${functionId}/schedules`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(schedule),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || 'Failed to create schedule');
+    }
+    return res.json();
+  },
+
+  // Delete schedule
+  async deleteSchedule(functionId: number, scheduleId: number): Promise<void> {
+    const res = await fetch(`${API_BASE}/functions/${functionId}/schedules/${scheduleId}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || 'Failed to delete schedule');
     }
   },
 };

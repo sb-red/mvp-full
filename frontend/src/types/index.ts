@@ -78,3 +78,19 @@ export interface ExecutionState {
   result: InvokeResponse | null;
   error: string | null;
 }
+
+export interface FunctionSchedule {
+  id: number;
+  function_id: number;
+  scheduled_at: string;
+  payload: Record<string, unknown>;
+  executed: boolean;
+  executed_at?: string;
+  status?: string;
+  error_message?: string;
+}
+
+export interface CreateScheduleRequest {
+  scheduled_at: string;
+  payload?: Record<string, unknown>;
+}

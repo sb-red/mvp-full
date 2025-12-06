@@ -77,6 +77,22 @@ func (s *DBService) InitSchema(ctx context.Context) error {
 
 	CREATE INDEX IF NOT EXISTS idx_function_invocations_function_id ON function_invocations(function_id);
 	CREATE INDEX IF NOT EXISTS idx_function_invocations_invoked_at ON function_invocations(invoked_at DESC);
+
+	CREATE TABLE IF NOT EXISTS function_schedules (
+		id BIGSERIAL PRIMARY KEY,
+		function_id BIGINT NOT NULL REFERENCES functions(id) ON DELETE CASCADE,
+		scheduled_at TIMESTAMPTZ NOT NULL,
+		payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+		executed BOOLEAN NOT NULL DEFAULT FALSE,
+		executed_at TIMESTAMPTZ,
+		status VARCHAR(20),
+		error_message TEXT,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_function_schedules_function_id ON function_schedules(function_id);
+	CREATE INDEX IF NOT EXISTS idx_function_schedules_pending ON function_schedules(scheduled_at) WHERE executed = FALSE;
 	`
 
 	_, err := s.db.ExecContext(ctx, schema)

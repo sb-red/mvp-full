@@ -74,8 +74,15 @@ func main() {
 	// Initialize function service
 	functionService := services.NewFunctionService(dbService, storageService, redisService)
 
-	// Initialize handlers
+	// Initialize handlers/services
 	functionHandler := handlers.NewFunctionHandler(functionService)
+	scheduleService := services.NewScheduleService(dbService)
+	scheduleHandler := handlers.NewScheduleHandler(scheduleService)
+
+	// Start schedule runner
+	scheduleRunner := services.NewScheduleRunner(scheduleService, functionService)
+	scheduleRunner.Start()
+	defer scheduleRunner.Stop()
 
 	// Fiber App
 	app := fiber.New(fiber.Config{
@@ -111,6 +118,9 @@ func main() {
 	api.Get("/functions/:id/invocations", functionHandler.ListInvocations)
 	api.Get("/functions/:id/invocations/:invocationId", functionHandler.GetInvocationResult)
 	api.Delete("/functions/:id", functionHandler.DeleteFunction)
+	api.Post("/functions/:id/schedules", scheduleHandler.CreateSchedule)
+	api.Get("/functions/:id/schedules", scheduleHandler.ListSchedules)
+	api.Delete("/functions/:id/schedules/:scheduleId", scheduleHandler.DeleteSchedule)
 
 	log.Printf("SoftGate Server starting on port %s", serverPort)
 	log.Printf("Database: %s:%d/%s", dbHost, dbPort, dbName)
