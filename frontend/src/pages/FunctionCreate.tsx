@@ -5,14 +5,18 @@ import { api } from '../api/lambdaApi';
 import { FunctionParam, CreateFunctionRequest } from '../types';
 import './FunctionCreate.css';
 
-const DEFAULT_PYTHON_CODE = `def handler(event):
-    """
-    event example:
-    {
-        "score": 87
-    }
-    """
-    score = int(event["score"])
+type RuntimeConfig = {
+  label: string;
+  language: string;
+  defaultCode: string;
+};
+
+const RUNTIME_CONFIGS: Record<string, RuntimeConfig> = {
+  'python3.11': {
+    label: 'Python 3.11',
+    language: 'python',
+    defaultCode: `def handler(event):
+    score = int(event.get("score", 0))
 
     if score >= 90:
         grade = "A"
@@ -29,37 +33,129 @@ const DEFAULT_PYTHON_CODE = `def handler(event):
         "score": score,
         "grade": grade
     }
-`;
-
-const DEFAULT_JS_CODE = `function handler(event) {
-    /*
-    event example:
-    {
-        "score": 87
-    }
-    */
-    const score = parseInt(event.score);
-
-    let grade;
-    if (score >= 90) grade = "A";
-    else if (score >= 80) grade = "B";
-    else if (score >= 70) grade = "C";
-    else if (score >= 60) grade = "D";
-    else grade = "F";
-
+`,
+  },
+  pypy3: {
+    label: 'PyPy 3',
+    language: 'python',
+    defaultCode: `def handler(event):
+    message = event.get("message", "hello")
     return {
-        score: score,
-        grade: grade
-    };
+        "runtime": "pypy3",
+        "echo": message
+    }
+`,
+  },
+  javascript: {
+    label: 'JavaScript (Node.js)',
+    language: 'javascript',
+    defaultCode: `function handler(event) {
+  const score = parseInt(event.score ?? 0, 10);
+  let grade;
+  if (score >= 90) grade = "A";
+  else if (score >= 80) grade = "B";
+  else if (score >= 70) grade = "C";
+  else if (score >= 60) grade = "D";
+  else grade = "F";
+
+  return {
+    score,
+    grade,
+  };
 }
-`;
+`,
+  },
+  java11: {
+    label: 'Java 11',
+    language: 'java',
+    defaultCode: `import java.util.Map;
+import java.util.HashMap;
+
+class Handler {
+    public static Map<String, Object> handle(Map<String, Object> event) {
+        Map<String, Object> result = new HashMap<>();
+        Object rawScore = event.getOrDefault("score", 0);
+        int score = Integer.parseInt(String.valueOf(rawScore));
+        result.put("score", score);
+        result.put("runtime", "java11");
+        return result;
+    }
+}
+`,
+  },
+  java17: {
+    label: 'Java 17',
+    language: 'java',
+    defaultCode: `import java.util.Map;
+import java.util.HashMap;
+
+class Handler {
+    public static Map<String, Object> handle(Map<String, Object> event) {
+        Map<String, Object> result = new HashMap<>();
+        String name = String.valueOf(event.getOrDefault("name", "world"));
+        result.put("message", "Hello " + name + " from Java 17");
+        return result;
+    }
+}
+`,
+  },
+  java21: {
+    label: 'Java 21',
+    language: 'java',
+    defaultCode: `import java.util.Map;
+import java.util.HashMap;
+
+class Handler {
+    public static Map<String, Object> handle(Map<String, Object> event) {
+        Map<String, Object> result = new HashMap<>();
+        String name = String.valueOf(event.getOrDefault("name", "world"));
+        result.put("message", "Hello " + name + " from Java 21");
+        return result;
+    }
+}
+`,
+  },
+  kotlin: {
+    label: 'Kotlin',
+    language: 'kotlin',
+    defaultCode: `object Handler {
+    @JvmStatic
+    fun handle(event: Map<String, Any?>): Map<String, Any?> {
+        val text = event["message"]?.toString() ?: "hello"
+        return mapOf(
+            "runtime" to "kotlin",
+            "echo" to text
+        )
+    }
+}
+`,
+  },
+  swift: {
+    label: 'Swift',
+    language: 'swift',
+    defaultCode: `func handler(event: [String: Any]) -> [String: Any] {
+    let name = event["name"] as? String ?? "world"
+    return [
+        "runtime": "swift",
+        "greeting": "Hello \\(name) from Swift"
+    ]
+}
+`,
+  },
+};
+
+const DEFAULT_RUNTIME = 'python3.11';
+const runtimeOptions = Object.entries(RUNTIME_CONFIGS).map(([value, config]) => ({
+  value,
+  label: config.label,
+}));
 
 export function FunctionCreate() {
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [runtime, setRuntime] = useState('python3.11');
-  const [code, setCode] = useState(DEFAULT_PYTHON_CODE);
+  const [runtime, setRuntime] = useState(DEFAULT_RUNTIME);
+  const [code, setCode] = useState(RUNTIME_CONFIGS[DEFAULT_RUNTIME].defaultCode);
   const [params, setParams] = useState<FunctionParam[]>([
     { key: 'score', type: 'int', required: true, description: '시험 점수 (0~100)' }
   ]);
@@ -69,10 +165,11 @@ export function FunctionCreate() {
 
   const handleRuntimeChange = (newRuntime: string) => {
     setRuntime(newRuntime);
-    if (newRuntime.includes('python')) {
-      setCode(DEFAULT_PYTHON_CODE);
+    const config = RUNTIME_CONFIGS[newRuntime];
+    if (config) {
+      setCode(config.defaultCode);
     } else {
-      setCode(DEFAULT_JS_CODE);
+      setCode('');
     }
   };
 
@@ -163,8 +260,9 @@ export function FunctionCreate() {
           <div className="form-group">
             <label>Runtime</label>
             <select value={runtime} onChange={(e) => handleRuntimeChange(e.target.value)}>
-              <option value="python3.11">Python 3.11</option>
-              <option value="nodejs18">Node.js 18</option>
+              {runtimeOptions.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -226,7 +324,7 @@ export function FunctionCreate() {
           <div className="code-editor">
             <Editor
               height="400px"
-              language={runtime.includes('python') ? 'python' : 'javascript'}
+              language={RUNTIME_CONFIGS[runtime]?.language || 'plaintext'}
               value={code}
               onChange={(value) => setCode(value || '')}
               theme="vs-dark"
