@@ -23,6 +23,9 @@ FROM alpine:3.19
 
 WORKDIR /app
 
+# Install curl for healthcheck
+RUN apk add --no-cache curl
+
 # Copy binary from build stage
 COPY --from=build /app/server .
 

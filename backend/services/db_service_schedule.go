@@ -88,11 +88,11 @@ func (s *DBService) DeleteSchedule(ctx context.Context, functionID, scheduleID i
 	return err
 }
 
-// MarkScheduleExecuted marks a schedule as executed with result
+// MarkScheduleExecuted updates the schedule execution result
 func (s *DBService) MarkScheduleExecuted(ctx context.Context, scheduleID int64, status, errMsg string) error {
 	_, err := s.db.ExecContext(ctx, `
 		UPDATE function_schedules
-		SET executed = TRUE, executed_at = now(), status = $2, error_message = $3, updated_at = now()
+		SET status = $2, error_message = $3, updated_at = now()
 		WHERE id = $1
 	`, scheduleID, status, errMsg)
 	return err

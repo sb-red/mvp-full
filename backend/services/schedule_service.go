@@ -82,6 +82,7 @@ func (s *ScheduleService) ClaimDueSchedules(ctx context.Context, limit int) ([]m
 	defer rows.Close()
 
 	var schedules []models.FunctionSchedule
+	var scheduleIDs []int64
 	for rows.Next() {
 		var sched models.FunctionSchedule
 		var payloadJSON []byte
@@ -103,6 +104,34 @@ func (s *ScheduleService) ClaimDueSchedules(ctx context.Context, limit int) ([]m
 			sched.ErrorMessage = errorMsg.String
 		}
 		schedules = append(schedules, sched)
+		scheduleIDs = append(scheduleIDs, sched.ID)
+	}
+
+	// Mark as executed immediately to prevent duplicate execution
+	if len(scheduleIDs) > 0 {
+		// Create placeholder string for IN clause
+		placeholders := ""
+		for i := range scheduleIDs {
+			if i > 0 {
+				placeholders += ","
+			}
+			placeholders += fmt.Sprintf("$%d", i+1)
+		}
+
+		query := fmt.Sprintf(`
+			UPDATE function_schedules
+			SET executed = TRUE, executed_at = now(), updated_at = now()
+			WHERE id IN (%s)
+		`, placeholders)
+
+		args := make([]interface{}, len(scheduleIDs))
+		for i, id := range scheduleIDs {
+			args[i] = id
+		}
+
+		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
