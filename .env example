@@ -1,0 +1,13 @@
+# .env 파일 생성
+## cp .env.example .env
+
+# Database Configuration
+DB_HOST=your-external-db-host.com
+DB_PORT=5432
+DB_USER=your_user
+DB_PASSWORD=your_password
+DB_NAME=your_database
+
+# AWS Configuration
+AWS_ACCESS_KEY_ID=A.....
+AWS_SECRET_ACCESS_KEY=B....
