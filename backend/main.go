@@ -27,10 +27,21 @@ import (
 // @BasePath /api
 func main() {
 	// Initialize X-Ray
+	err := os.Setenv("AWS_XRAY_DAEMON_ADDRESS", getEnv("XRAY_DAEMON_ADDRESS", "127.0.0.1:2000"))
+	if err != nil {
+		log.Printf("Warning: Failed to set X-Ray daemon address: %v", err)
+	}
+
 	xray.Configure(xray.Config{
 		DaemonAddr:     getEnv("XRAY_DAEMON_ADDRESS", "127.0.0.1:2000"),
 		ServiceVersion: "1.0.0",
 	})
+
+	// Set X-Ray service name for tracing
+	err = os.Setenv("AWS_XRAY_TRACING_NAME", "softgate-backend")
+	if err != nil {
+		log.Printf("Warning: Failed to set X-Ray service name: %v", err)
+	}
 
 	// Config
 	redisHost := getEnv("REDIS_HOST", "localhost")
@@ -49,7 +60,8 @@ func main() {
 	storagePath := getEnv("STORAGE_BUCKET", getEnv("STORAGE_PATH", "/data/code"))
 
 	// Initialize services
-	dbService, err := services.NewDBService(dbHost, dbPort, dbUser, dbPassword, dbName)
+	dbService, dbErr := services.NewDBService(dbHost, dbPort, dbUser, dbPassword, dbName)
+	err = dbErr
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
