@@ -11,9 +11,9 @@ WORKDIR /app
 COPY Gemfile ./
 RUN bundle install
 
-# Create non-root user
-RUN groupadd -r -g 1000 worker && \
-    useradd -r -u 1000 -g worker -d /app -s /sbin/nologin worker
+# Create non-root user (use 10001 to avoid conflicts)
+RUN groupadd -r -g 10001 worker && \
+    useradd -r -u 10001 -g worker -d /app -s /sbin/nologin worker
 
 # Copy source files with correct ownership
 COPY --chown=worker:worker . .

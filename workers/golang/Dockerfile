@@ -12,9 +12,9 @@ RUN go mod tidy && \
 # Runtime stage
 FROM golang:1.21-alpine
 
-# Create non-root user
-RUN addgroup -g 1000 -S worker && \
-    adduser -u 1000 -S worker -G worker -h /app
+# Create non-root user (use 10001 to avoid conflicts with existing users)
+RUN addgroup -g 10001 -S worker && \
+    adduser -u 10001 -S worker -G worker -h /app
 
 WORKDIR /app
 

@@ -13,9 +13,9 @@ RUN swift build -c release
 # Runtime stage
 FROM swift:5.9-jammy
 
-# Create non-root user
-RUN groupadd -r -g 1000 worker && \
-    useradd -r -u 1000 -g worker -d /app -s /sbin/nologin worker
+# Create non-root user (use 10001 to avoid conflicts)
+RUN groupadd -r -g 10001 worker && \
+    useradd -r -u 10001 -g worker -d /app -s /sbin/nologin worker
 
 WORKDIR /app
 
