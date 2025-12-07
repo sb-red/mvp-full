@@ -54,13 +54,14 @@ func main() {
 	dbUser := getEnv("DB_USER", "softgate")
 	dbPassword := getEnv("DB_PASSWORD", "softgate")
 	dbName := getEnv("DB_NAME", "softgate")
+	dbSSLMode := getEnv("DB_SSLMODE", "disable")
 
 	// Storage Config
 	storageType := getEnv("STORAGE_TYPE", "local")
-	storagePath := getEnv("STORAGE_BUCKET", getEnv("STORAGE_PATH", "/data/code"))
+	storageBucket := getEnv("STORAGE_BUCKET", "/data/code")
 
 	// Initialize services
-	dbService, dbErr := services.NewDBService(dbHost, dbPort, dbUser, dbPassword, dbName)
+	dbService, dbErr := services.NewDBService(dbHost, dbPort, dbUser, dbPassword, dbName, dbSSLMode)
 	err = dbErr
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
@@ -74,11 +75,11 @@ func main() {
 	log.Println("Database schema initialized")
 
 	// Initialize storage service
-	storageService, err := services.NewStorageService(storageType, storagePath)
+	storageService, err := services.NewStorageService(storageType, storageBucket)
 	if err != nil {
 		log.Fatalf("Failed to initialize storage service: %v", err)
 	}
-	log.Printf("Storage service initialized: %s (%s)", storageType, storagePath)
+	log.Printf("Storage service initialized: %s (%s)", storageType, storageBucket)
 
 	// Initialize Redis service
 	redisService := services.NewRedisService(redisHost, redisPort)

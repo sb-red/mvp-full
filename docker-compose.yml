@@ -40,17 +40,17 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - SERVER_PORT=8080
-      - DB_HOST=${DB_HOST}
-      - DB_PORT=${DB_PORT}
-      - DB_USER=${DB_USER}
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DB_NAME=${DB_NAME}
-      - STORAGE_TYPE=s3
-      - STORAGE_BUCKET=jeonjunbae
-      - AWS_REGION=ap-northeast-2
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_USER=${DB_USER:-softgate}
+      - DB_PASSWORD=${DB_PASSWORD:-softgate}
+      - DB_NAME=${DB_NAME:-softgate}
+      - DB_SSLMODE=${DB_SSLMODE:-disable}
+      - STORAGE_TYPE=${STORAGE_TYPE:-local}
+      - STORAGE_BUCKET=${STORAGE_BUCKET:-softgate-functions}
+      - AWS_REGION=${AWS_REGION:-ap-northeast-2}
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - STORAGE_PATH=softgate-functions
     volumes:
       - code_storage:/data/code
     networks:
