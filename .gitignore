@@ -18,4 +18,21 @@ Thumbs.db
 *.tmp
 *.bak
 
+# Backend
 backend/.cache/
+
+# Gradle (Kotlin worker)
+.gradle/
+build/
+
+# Maven (Java workers)
+target/
+
+# Node
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
