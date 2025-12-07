@@ -71,6 +71,36 @@
   color: #854d0e;
 }
 
+.runtime-badge.c-family {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.runtime-badge.ruby {
+  background: #fce7f3;
+  color: #9d174d;
+}
+
+.runtime-badge.csharp {
+  background: #ede9fe;
+  color: #6b21a8;
+}
+
+.runtime-badge.golang {
+  background: #cffafe;
+  color: #0e7490;
+}
+
+.runtime-badge.rust {
+  background: #fed7aa;
+  color: #c2410c;
+}
+
+.runtime-badge.default {
+  background: #f3f4f6;
+  color: #374151;
+}
+
 .description {
   color: #6b7280;
   font-size: 16px;

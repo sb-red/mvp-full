@@ -194,24 +194,30 @@ func (s *FunctionService) DeleteFunction(ctx context.Context, id int64) (*models
 
 // getQueueName returns the Redis queue name based on runtime
 func getQueueName(runtime string) string {
-	switch runtime {
-	case "python3.11", "python":
-		return "execution_queue:python"
-	case "javascript", "node", "nodejs18":
-		return "execution_queue:javascript"
-	case "java11":
-		return "execution_queue:java11"
-	case "java17":
-		return "execution_queue:java17"
-	case "java21":
-		return "execution_queue:java21"
-	case "swift":
-		return "execution_queue:swift"
-	case "kotlin":
-		return "execution_queue:kotlin"
-	case "pypy3":
-		return "execution_queue:pypy3"
-	default:
-		return "execution_queue:python" // default fallback
+	queueMap := map[string]string{
+		// Interpreted languages
+		"python3.11":  "execution_queue:python",
+		"python":      "execution_queue:python",
+		"pypy3":       "execution_queue:pypy3",
+		"nodejs18":    "execution_queue:javascript",
+		"javascript":  "execution_queue:javascript",
+		"ruby":        "execution_queue:ruby",
+		// Compiled languages - Group A
+		"cpp_gcc":     "execution_queue:cpp_gcc",
+		"cpp17_clang": "execution_queue:cpp17_clang",
+		"c99":         "execution_queue:c99",
+		"csharp":      "execution_queue:csharp",
+		"golang":      "execution_queue:golang",
+		"rust":        "execution_queue:rust",
+		// Compiled languages - Group B
+		"java11":      "execution_queue:java11",
+		"java17":      "execution_queue:java17",
+		"java21":      "execution_queue:java21",
+		"swift":       "execution_queue:swift",
+		"kotlin":      "execution_queue:kotlin",
 	}
+	if queue, exists := queueMap[runtime]; exists {
+		return queue
+	}
+	return "execution_queue:python" // default fallback
 }

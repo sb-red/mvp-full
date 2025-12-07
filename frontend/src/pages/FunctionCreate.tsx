@@ -5,17 +5,8 @@ import { api } from '../api/lambdaApi';
 import { FunctionParam, CreateFunctionRequest } from '../types';
 import './FunctionCreate.css';
 
-type RuntimeConfig = {
-  label: string;
-  language: string;
-  defaultCode: string;
-};
-
-const RUNTIME_CONFIGS: Record<string, RuntimeConfig> = {
-  'python3.11': {
-    label: 'Python 3.11',
-    language: 'python',
-    defaultCode: `def handler(event):
+// Default code templates
+const DEFAULT_PYTHON_CODE = `def handler(event):
     score = int(event.get("score", 0))
 
     if score >= 90:
@@ -33,23 +24,29 @@ const RUNTIME_CONFIGS: Record<string, RuntimeConfig> = {
         "score": score,
         "grade": grade
     }
-`,
-  },
-  pypy3: {
-    label: 'PyPy 3',
-    language: 'python',
-    defaultCode: `def handler(event):
-    message = event.get("message", "hello")
+`;
+
+const DEFAULT_PYPY3_CODE = `def handler(event):
+    score = int(event.get("score", 0))
+
+    if score >= 90:
+        grade = "A"
+    elif score >= 80:
+        grade = "B"
+    elif score >= 70:
+        grade = "C"
+    elif score >= 60:
+        grade = "D"
+    else:
+        grade = "F"
+
     return {
-        "runtime": "pypy3",
-        "echo": message
+        "score": score,
+        "grade": grade
     }
-`,
-  },
-  javascript: {
-    label: 'JavaScript (Node.js)',
-    language: 'javascript',
-    defaultCode: `function handler(event) {
+`;
+
+const DEFAULT_JS_CODE = `function handler(event) {
   const score = parseInt(event.score ?? 0, 10);
   let grade;
   if (score >= 90) grade = "A";
@@ -63,99 +60,224 @@ const RUNTIME_CONFIGS: Record<string, RuntimeConfig> = {
     grade,
   };
 }
-`,
-  },
-  java11: {
-    label: 'Java 11',
-    language: 'java',
-    defaultCode: `import java.util.Map;
-import java.util.HashMap;
+`;
 
-class Handler {
+const DEFAULT_RUBY_CODE = `def handler(event)
+  # event example: { "score" => 87 }
+  score = event["score"].to_i
+
+  grade = case score
+          when 90..100 then "A"
+          when 80..89 then "B"
+          when 70..79 then "C"
+          when 60..69 then "D"
+          else "F"
+          end
+
+  { "score" => score, "grade" => grade }
+end
+`;
+
+const DEFAULT_CPP_CODE = `#include <string>
+
+json handler(const json& event) {
+    int score = event["score"].get<int>();
+    std::string grade;
+
+    if (score >= 90) grade = "A";
+    else if (score >= 80) grade = "B";
+    else if (score >= 70) grade = "C";
+    else if (score >= 60) grade = "D";
+    else grade = "F";
+
+    return {{"score", score}, {"grade", grade}};
+}
+`;
+
+const DEFAULT_C99_CODE = `cJSON* handler(cJSON* event) {
+    int score = cJSON_GetObjectItem(event, "score")->valueint;
+    const char* grade;
+
+    if (score >= 90) grade = "A";
+    else if (score >= 80) grade = "B";
+    else if (score >= 70) grade = "C";
+    else if (score >= 60) grade = "D";
+    else grade = "F";
+
+    cJSON* result = cJSON_CreateObject();
+    cJSON_AddNumberToObject(result, "score", score);
+    cJSON_AddStringToObject(result, "grade", grade);
+    return result;
+}
+`;
+
+const DEFAULT_CSHARP_CODE = `using System;
+using System.Text.Json;
+
+public class Handler {
+    public static object Run(JsonElement evt) {
+        int score = evt.GetProperty("score").GetInt32();
+        string grade;
+
+        if (score >= 90) grade = "A";
+        else if (score >= 80) grade = "B";
+        else if (score >= 70) grade = "C";
+        else if (score >= 60) grade = "D";
+        else grade = "F";
+
+        return new { score = score, grade = grade };
+    }
+}
+`;
+
+const DEFAULT_GO_CODE = `func handler(event map[string]interface{}) map[string]interface{} {
+    score := int(event["score"].(float64))
+    var grade string
+
+    switch {
+    case score >= 90:
+        grade = "A"
+    case score >= 80:
+        grade = "B"
+    case score >= 70:
+        grade = "C"
+    case score >= 60:
+        grade = "D"
+    default:
+        grade = "F"
+    }
+
+    return map[string]interface{}{
+        "score": score,
+        "grade": grade,
+    }
+}
+`;
+
+const DEFAULT_RUST_CODE = `fn handler(event: Value) -> Value {
+    let score = event["score"].as_i64().unwrap_or(0);
+    let grade = match score {
+        90..=100 => "A",
+        80..=89 => "B",
+        70..=79 => "C",
+        60..=69 => "D",
+        _ => "F",
+    };
+
+    json!({
+        "score": score,
+        "grade": grade
+    })
+}
+`;
+
+const DEFAULT_JAVA_CODE = `class Handler {
     public static Map<String, Object> handle(Map<String, Object> event) {
         Map<String, Object> result = new HashMap<>();
-        Object rawScore = event.getOrDefault("score", 0);
-        int score = Integer.parseInt(String.valueOf(rawScore));
+
+        Object raw = event.get("score");
+        int score = (raw instanceof Number) ? ((Number) raw).intValue() : 0;
+
+        String grade =
+            (score >= 90) ? "A" :
+            (score >= 80) ? "B" :
+            (score >= 70) ? "C" :
+            (score >= 60) ? "D" : "F";
+
         result.put("score", score);
-        result.put("runtime", "java11");
+        result.put("grade", grade);
         return result;
     }
 }
-`,
-  },
-  java17: {
-    label: 'Java 17',
-    language: 'java',
-    defaultCode: `import java.util.Map;
-import java.util.HashMap;
+`;
 
-class Handler {
-    public static Map<String, Object> handle(Map<String, Object> event) {
-        Map<String, Object> result = new HashMap<>();
-        String name = String.valueOf(event.getOrDefault("name", "world"));
-        result.put("message", "Hello " + name + " from Java 17");
-        return result;
-    }
-}
-`,
-  },
-  java21: {
-    label: 'Java 21',
-    language: 'java',
-    defaultCode: `import java.util.Map;
-import java.util.HashMap;
-
-class Handler {
-    public static Map<String, Object> handle(Map<String, Object> event) {
-        Map<String, Object> result = new HashMap<>();
-        String name = String.valueOf(event.getOrDefault("name", "world"));
-        result.put("message", "Hello " + name + " from Java 21");
-        return result;
-    }
-}
-`,
-  },
-  kotlin: {
-    label: 'Kotlin',
-    language: 'kotlin',
-    defaultCode: `object Handler {
+const DEFAULT_KOTLIN_CODE = `object Handler {
     @JvmStatic
     fun handle(event: Map<String, Any?>): Map<String, Any?> {
-        val text = event["message"]?.toString() ?: "hello"
+        val score = (event["score"] as? Number)?.toInt() ?: 0
+        val grade = when {
+            score >= 90 -> "A"
+            score >= 80 -> "B"
+            score >= 70 -> "C"
+            score >= 60 -> "D"
+            else -> "F"
+        }
         return mapOf(
-            "runtime" to "kotlin",
-            "echo" to text
+            "score" to score,
+            "grade" to grade
         )
     }
 }
-`,
-  },
-  swift: {
-    label: 'Swift',
-    language: 'swift',
-    defaultCode: `func handler(event: [String: Any]) -> [String: Any] {
-    let name = event["name"] as? String ?? "world"
+`;
+
+const DEFAULT_SWIFT_CODE = `func handler(event: [String: Any]) -> [String: Any] {
+    let score = event["score"] as? Int ?? 0
+    let grade: String
+
+    switch score {
+    case 90...100: grade = "A"
+    case 80..<90: grade = "B"
+    case 70..<80: grade = "C"
+    case 60..<70: grade = "D"
+    default: grade = "F"
+    }
+
     return [
-        "runtime": "swift",
-        "greeting": "Hello \\(name) from Swift"
+        "score": score,
+        "grade": grade
     ]
 }
-`,
-  },
+`;
+
+const DEFAULT_CODES: Record<string, string> = {
+  'python3.11': DEFAULT_PYTHON_CODE,
+  'pypy3': DEFAULT_PYPY3_CODE,
+  'nodejs18': DEFAULT_JS_CODE,
+  'ruby': DEFAULT_RUBY_CODE,
+  'cpp_gcc': DEFAULT_CPP_CODE,
+  'cpp17_clang': DEFAULT_CPP_CODE,
+  'c99': DEFAULT_C99_CODE,
+  'csharp': DEFAULT_CSHARP_CODE,
+  'golang': DEFAULT_GO_CODE,
+  'rust': DEFAULT_RUST_CODE,
+  'java11': DEFAULT_JAVA_CODE,
+  'java17': DEFAULT_JAVA_CODE,
+  'java21': DEFAULT_JAVA_CODE,
+  'kotlin': DEFAULT_KOTLIN_CODE,
+  'swift': DEFAULT_SWIFT_CODE,
+};
+
+const getEditorLanguage = (runtime: string): string => {
+  const langMap: Record<string, string> = {
+    'python3.11': 'python',
+    'python': 'python',
+    'pypy3': 'python',
+    'nodejs18': 'javascript',
+    'javascript': 'javascript',
+    'cpp_gcc': 'cpp',
+    'cpp17_clang': 'cpp',
+    'c99': 'c',
+    'ruby': 'ruby',
+    'csharp': 'csharp',
+    'golang': 'go',
+    'rust': 'rust',
+    'java11': 'java',
+    'java17': 'java',
+    'java21': 'java',
+    'kotlin': 'kotlin',
+    'swift': 'swift',
+  };
+  return langMap[runtime] || 'plaintext';
 };
 
 const DEFAULT_RUNTIME = 'python3.11';
-const runtimeOptions = Object.entries(RUNTIME_CONFIGS).map(([value, config]) => ({
-  value,
-  label: config.label,
-}));
 
 export function FunctionCreate() {
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [runtime, setRuntime] = useState(DEFAULT_RUNTIME);
-  const [code, setCode] = useState(RUNTIME_CONFIGS[DEFAULT_RUNTIME].defaultCode);
+  const [code, setCode] = useState(DEFAULT_CODES[DEFAULT_RUNTIME]);
   const [params, setParams] = useState<FunctionParam[]>([
     { key: 'score', type: 'int', required: true, description: '시험 점수 (0~100)' }
   ]);
@@ -165,12 +287,7 @@ export function FunctionCreate() {
 
   const handleRuntimeChange = (newRuntime: string) => {
     setRuntime(newRuntime);
-    const config = RUNTIME_CONFIGS[newRuntime];
-    if (config) {
-      setCode(config.defaultCode);
-    } else {
-      setCode('');
-    }
+    setCode(DEFAULT_CODES[newRuntime] || DEFAULT_JS_CODE);
   };
 
   const addParam = () => {
@@ -260,9 +377,29 @@ export function FunctionCreate() {
           <div className="form-group">
             <label>Runtime</label>
             <select value={runtime} onChange={(e) => handleRuntimeChange(e.target.value)}>
-              {runtimeOptions.map(({ value, label }) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
+              <optgroup label="Interpreted">
+                <option value="python3.11">Python 3.11</option>
+                <option value="pypy3">PyPy 3</option>
+                <option value="nodejs18">Node.js 18</option>
+                <option value="ruby">Ruby 3.x</option>
+              </optgroup>
+              <optgroup label="JVM">
+                <option value="java11">Java 11</option>
+                <option value="java17">Java 17</option>
+                <option value="java21">Java 21</option>
+                <option value="kotlin">Kotlin</option>
+              </optgroup>
+              <optgroup label="Compiled (Native)">
+                <option value="cpp_gcc">C++ (GCC)</option>
+                <option value="cpp17_clang">C++17 (Clang)</option>
+                <option value="c99">C99</option>
+                <option value="golang">Go</option>
+                <option value="rust">Rust 2018</option>
+                <option value="swift">Swift</option>
+              </optgroup>
+              <optgroup label="Managed">
+                <option value="csharp">C# (.NET)</option>
+              </optgroup>
             </select>
           </div>
         </div>
@@ -324,7 +461,7 @@ export function FunctionCreate() {
           <div className="code-editor">
             <Editor
               height="400px"
-              language={RUNTIME_CONFIGS[runtime]?.language || 'plaintext'}
+              language={getEditorLanguage(runtime)}
               value={code}
               onChange={(value) => setCode(value || '')}
               theme="vs-dark"
