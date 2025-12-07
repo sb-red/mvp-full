@@ -128,20 +128,31 @@ func NewStorageService(storageType, pathOrBucket string) (StorageService, error)
 
 // GenerateCodeKey generates a unique key for storing function code
 func GenerateCodeKey(functionID int64, runtime string) string {
-	var ext string
-	switch runtime {
-	case "python3.11", "python", "pypy3":
-		ext = ".py"
-	case "javascript", "node", "nodejs18":
-		ext = ".js"
-	case "java11", "java17", "java21":
-		ext = ".java"
-	case "swift":
-		ext = ".swift"
-	case "kotlin":
-		ext = ".kt"
-	default:
-		ext = ".txt" // fallback for unknown runtimes
+	extMap := map[string]string{
+		// Interpreted
+		"python3.11":  ".py",
+		"python":      ".py",
+		"pypy3":       ".py",
+		"nodejs18":    ".js",
+		"javascript":  ".js",
+		"ruby":        ".rb",
+		// Compiled - Group A
+		"cpp_gcc":     ".cpp",
+		"cpp17_clang": ".cpp",
+		"c99":         ".c",
+		"csharp":      ".cs",
+		"golang":      ".go",
+		"rust":        ".rs",
+		// Compiled - Group B
+		"java11":      ".java",
+		"java17":      ".java",
+		"java21":      ".java",
+		"swift":       ".swift",
+		"kotlin":      ".kt",
+	}
+	ext := ".txt"
+	if e, exists := extMap[runtime]; exists {
+		ext = e
 	}
 	return fmt.Sprintf("code/functions/func_%d%s", functionID, ext)
 }

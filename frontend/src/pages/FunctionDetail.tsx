@@ -227,9 +227,40 @@ export function FunctionDetail() {
     }
   }, [func, navigate]);
 
-  const getEditorLanguage = (runtime: string) => {
-    if (runtime.includes('python')) return 'python';
-    return 'javascript';
+  const getEditorLanguage = (runtime: string): string => {
+    const langMap: Record<string, string> = {
+      'python3.11': 'python',
+      'python': 'python',
+      'pypy3': 'python',
+      'nodejs18': 'javascript',
+      'javascript': 'javascript',
+      'cpp_gcc': 'cpp',
+      'cpp17_clang': 'cpp',
+      'c99': 'c',
+      'ruby': 'ruby',
+      'csharp': 'csharp',
+      'golang': 'go',
+      'rust': 'rust',
+      'java11': 'java',
+      'java17': 'java',
+      'java21': 'java',
+      'kotlin': 'kotlin',
+      'swift': 'swift',
+    };
+    return langMap[runtime] || 'plaintext';
+  };
+
+  const getRuntimeBadgeClass = (runtime: string): string => {
+    if (runtime.includes('python') || runtime === 'pypy3') return 'python';
+    if (runtime.includes('node') || runtime.includes('javascript')) return 'javascript';
+    if (runtime.includes('cpp') || runtime === 'c99') return 'c-family';
+    if (runtime === 'ruby') return 'ruby';
+    if (runtime === 'csharp') return 'csharp';
+    if (runtime === 'golang') return 'golang';
+    if (runtime === 'rust') return 'rust';
+    if (runtime.includes('java') || runtime === 'kotlin') return 'java';
+    if (runtime === 'swift') return 'swift';
+    return 'default';
   };
 
   const formatDate = (dateStr: string) => {
@@ -252,7 +283,7 @@ export function FunctionDetail() {
         <div className="header-row">
           <div className="header-info">
             <h1>{func.name}</h1>
-            <span className={`runtime-badge ${func.runtime.includes('python') ? 'python' : 'javascript'}`}>
+            <span className={`runtime-badge ${getRuntimeBadgeClass(func.runtime)}`}>
               {func.runtime}
             </span>
           </div>
