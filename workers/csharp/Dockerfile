@@ -1,6 +1,7 @@
-FROM mcr.microsoft.com/dotnet/sdk:7.0
+# Build stage
+FROM mcr.microsoft.com/dotnet/sdk:7.0 AS builder
 
-WORKDIR /app
+WORKDIR /build
 
 # Copy csproj first for better caching
 COPY Worker.csproj ./
@@ -14,7 +15,19 @@ COPY *.cs ./
 # Build the worker
 RUN dotnet publish -c Release -o out
 
-# Create sandbox directory
-RUN mkdir -p /tmp/sandbox
+# Runtime stage
+FROM mcr.microsoft.com/dotnet/runtime:7.0
 
-CMD ["dotnet", "out/Worker.dll"]
+# Create non-root user (use 10001 to avoid conflicts)
+RUN groupadd -r -g 10001 worker && \
+    useradd -r -u 10001 -g worker -d /app -s /sbin/nologin worker
+
+WORKDIR /app
+
+# Copy published output
+COPY --from=builder --chown=worker:worker /build/out .
+
+# Switch to non-root user
+USER worker
+
+CMD ["dotnet", "Worker.dll"]

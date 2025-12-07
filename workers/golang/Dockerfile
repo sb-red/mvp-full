@@ -1,20 +1,30 @@
+# Build stage
+FROM golang:1.21-alpine AS builder
+
+WORKDIR /build
+
+COPY go.mod ./
+COPY *.go ./
+
+RUN go mod tidy && \
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o worker .
+
+# Runtime stage
 FROM golang:1.21-alpine
+
+# Create non-root user (use 10001 to avoid conflicts with existing users)
+RUN addgroup -g 10001 -S worker && \
+    adduser -u 10001 -S worker -G worker -h /app
 
 WORKDIR /app
 
-# Copy go.mod first
-COPY go.mod ./
+# Copy built worker binary
+COPY --from=builder --chown=worker:worker /build/worker .
 
-# Copy source files
-COPY *.go ./
+# Switch to non-root user
+USER worker
 
-# Download dependencies and generate go.sum
-RUN go mod tidy
-
-# Build the worker binary
-RUN go build -o worker .
-
-# Create sandbox directory
-RUN mkdir -p /tmp/sandbox /tmp/gocache /tmp/gopath
+ENV GOCACHE=/tmp/gocache
+ENV GOPATH=/tmp/gopath
 
 CMD ["./worker"]

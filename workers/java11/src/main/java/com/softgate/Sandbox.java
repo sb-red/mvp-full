@@ -113,6 +113,18 @@ public class Sandbox {
     }
 
     private static void downloadGson(Path gsonJar) throws IOException, InterruptedException {
+        // Use pre-downloaded Gson JAR from environment variable (for network-isolated environment)
+        String preloadedPath = System.getenv("GSON_JAR_PATH");
+        if (preloadedPath != null && !preloadedPath.isEmpty()) {
+            java.nio.file.Files.copy(
+                java.nio.file.Path.of(preloadedPath),
+                gsonJar,
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+            );
+            return;
+        }
+
+        // Fallback to download (for development environment)
         ProcessBuilder pb = new ProcessBuilder(
             "wget", "-q", "-O", gsonJar.toString(),
             "https://repo1.maven.org/maven2/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar"

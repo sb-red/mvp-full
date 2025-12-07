@@ -1,8 +1,62 @@
+# SoftGate Docker Compose with gVisor Security
+# gVisor 설치 필요: https://gvisor.dev/docs/user_guide/install/
+
+# Common configurations using YAML anchors
+x-worker-common: &worker-common
+  runtime: runsc
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  depends_on:
+    redis:
+      condition: service_healthy
+  environment:
+    - REDIS_HOST=redis
+    - REDIS_PORT=6379
+
+x-interpreter-worker: &interpreter-worker
+  <<: *worker-common
+  networks:
+    - softgate-workers
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=256m
+  deploy:
+    resources:
+      limits:
+        cpus: '0.5'
+        memory: 512M
+
+x-compiler-worker: &compiler-worker
+  <<: *worker-common
+  networks:
+    - softgate-workers
+  tmpfs:
+    - /tmp:rw,nosuid,size=512m
+  deploy:
+    resources:
+      limits:
+        cpus: '1.0'
+        memory: 1024M
+
+x-jvm-worker: &jvm-worker
+  <<: *worker-common
+  networks:
+    - softgate-workers
+  tmpfs:
+    - /tmp:rw,nosuid,size=512m
+  deploy:
+    resources:
+      limits:
+        cpus: '0.5'
+        memory: 768M
+
 services:
   postgres:
     image: postgres:15-alpine
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     environment:
       - POSTGRES_USER=softgate
       - POSTGRES_PASSWORD=softgate
@@ -10,7 +64,9 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - softgate-net
+      - softgate-backend
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U softgate"]
       interval: 5s
@@ -20,9 +76,13 @@ services:
   redis:
     image: redis:alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     networks:
-      - softgate-net
+      - softgate-backend
+      - softgate-workers
+    security_opt:
+      - no-new-privileges:true
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -32,6 +92,8 @@ services:
   backend:
     build: ./backend
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     expose:
@@ -40,7 +102,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - SERVER_PORT=8080
-      - DB_HOST=${DB_HOST:-postgres}
+      - DB_HOST=postgres
       - DB_PORT=${DB_PORT:-5432}
       - DB_USER=${DB_USER:-softgate}
       - DB_PASSWORD=${DB_PASSWORD:-softgate}
@@ -58,255 +120,21 @@ services:
     volumes:
       - code_storage:/data/code
     networks:
-      - softgate-net
+      - softgate-public
+      - softgate-backend
+      - softgate-workers
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/health"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
-
-  worker-python:
-    build: ./workers/python
-    depends_on:
-      redis:
-        condition: service_healthy
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    networks:
-      - softgate-net
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-
-  worker-javascript:
-    build: ./workers/javascript
-    depends_on:
-      redis:
-        condition: service_healthy
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    networks:
-      - softgate-net
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-
-  # Group A workers
-  worker-ruby:
-    build: ./workers/ruby
-    depends_on:
-      redis:
-        condition: service_healthy
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    networks:
-      - softgate-net
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-
-  worker-golang:
-    build: ./workers/golang
-    depends_on:
-      redis:
-        condition: service_healthy
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    networks:
-      - softgate-net
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 1024M
-
-  worker-cpp-gcc:
-    build: ./workers/cpp_gcc
-    depends_on:
-      redis:
-        condition: service_healthy
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    networks:
-      - softgate-net
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 1024M
-
-  worker-cpp17-clang:
-    build: ./workers/cpp17_clang
-    depends_on:
-      redis:
-        condition: service_healthy
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    networks:
-      - softgate-net
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 1024M
-
-  worker-c99:
-    build: ./workers/c99
-    depends_on:
-      redis:
-        condition: service_healthy
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    networks:
-      - softgate-net
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 1024M
-
-  worker-rust:
-    build: ./workers/rust
-    depends_on:
-      redis:
-        condition: service_healthy
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    networks:
-      - softgate-net
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 1024M
-
-  worker-csharp:
-    build: ./workers/csharp
-    depends_on:
-      redis:
-        condition: service_healthy
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    networks:
-      - softgate-net
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 1024M
-
-  # Group B workers
-  worker-java11:
-    build: ./workers/java11
-    depends_on:
-      redis:
-        condition: service_healthy
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    networks:
-      - softgate-net
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-
-  worker-java17:
-    build: ./workers/java17
-    depends_on:
-      redis:
-        condition: service_healthy
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    networks:
-      - softgate-net
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-
-  worker-java21:
-    build: ./workers/java21
-    depends_on:
-      redis:
-        condition: service_healthy
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    networks:
-      - softgate-net
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-
-  worker-swift:
-    build: ./workers/swift
-    depends_on:
-      redis:
-        condition: service_healthy
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    networks:
-      - softgate-net
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-
-  worker-kotlin:
-    build: ./workers/kotlin
-    depends_on:
-      redis:
-        condition: service_healthy
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    networks:
-      - softgate-net
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-
-  worker-pypy3:
-    build: ./workers/pypy3
-    depends_on:
-      redis:
-        condition: service_healthy
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    networks:
-      - softgate-net
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
 
   frontend:
     build: ./frontend
@@ -315,11 +143,102 @@ services:
     ports:
       - "80:80"
     networks:
-      - softgate-net
+      - softgate-public
+    security_opt:
+      - no-new-privileges:true
+
+  # Interpreter Workers (noexec on /tmp)
+  worker-python:
+    <<: *interpreter-worker
+    build: ./workers/python
+    user: "1000:1000"
+
+  worker-javascript:
+    <<: *interpreter-worker
+    build: ./workers/javascript
+    user: "1000:1000"
+
+  worker-ruby:
+    <<: *interpreter-worker
+    build: ./workers/ruby
+    user: "1000:1000"
+
+  worker-pypy3:
+    <<: *interpreter-worker
+    build: ./workers/pypy3
+    user: "1000:1000"
+
+  # Compiler Workers (exec allowed on /tmp for compiled binaries)
+  worker-golang:
+    <<: *compiler-worker
+    build: ./workers/golang
+    user: "1000:1000"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - GOCACHE=/tmp/gocache
+      - GOPATH=/tmp/gopath
+
+  worker-rust:
+    <<: *compiler-worker
+    build: ./workers/rust
+    user: "1000:1000"
+
+  worker-c99:
+    <<: *compiler-worker
+    build: ./workers/c99
+    user: "1000:1000"
+
+  worker-cpp-gcc:
+    <<: *compiler-worker
+    build: ./workers/cpp_gcc
+    user: "1000:1000"
+
+  worker-cpp17-clang:
+    <<: *compiler-worker
+    build: ./workers/cpp17_clang
+    user: "1000:1000"
+
+  worker-csharp:
+    <<: *compiler-worker
+    build: ./workers/csharp
+    user: "1000:1000"
+
+  worker-swift:
+    <<: *compiler-worker
+    build: ./workers/swift
+    user: "1000:1000"
+
+  # JVM Workers
+  worker-java11:
+    <<: *jvm-worker
+    build: ./workers/java11
+    user: "1000:1000"
+
+  worker-java17:
+    <<: *jvm-worker
+    build: ./workers/java17
+    user: "1000:1000"
+
+  worker-java21:
+    <<: *jvm-worker
+    build: ./workers/java21
+    user: "1000:1000"
+
+  worker-kotlin:
+    <<: *jvm-worker
+    build: ./workers/kotlin
+    user: "1000:1000"
 
 networks:
-  softgate-net:
+  softgate-public:
     driver: bridge
+  softgate-backend:
+    driver: bridge
+    internal: true
+  softgate-workers:
+    driver: bridge
+    internal: true
 
 volumes:
   postgres_data:
