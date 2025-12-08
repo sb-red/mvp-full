@@ -92,6 +92,20 @@ services:
       timeout: 3s
       retries: 5
 
+  xray-daemon:
+    image: amazon/aws-xray-daemon:3.x
+    ports:
+      - "127.0.0.1:2000:2000/udp"
+    networks:
+      - softgate-public
+      - softgate-backend
+    environment:
+      - AWS_REGION=${AWS_REGION:-ap-northeast-2}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    security_opt:
+      - no-new-privileges:true
+
   backend:
     build: ./backend
     depends_on:
@@ -117,9 +131,7 @@ services:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - STORAGE_PATH=softgate-functions
-      - XRAY_DAEMON_ADDRESS=host.docker.internal:2000
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - XRAY_DAEMON_ADDRESS=xray-daemon:2000
     volumes:
       - code_storage:/data/code
     networks:
