@@ -2,6 +2,8 @@
 # gVisor 설치 필요: https://gvisor.dev/docs/user_guide/install/
 
 # Common configurations using YAML anchors
+# Note: gVisor (runsc) doesn't work with Docker's embedded DNS (127.0.0.11)
+# Workers use static IP for Redis instead of hostname
 x-worker-common: &worker-common
   runtime: runsc
   read_only: true
@@ -13,7 +15,7 @@ x-worker-common: &worker-common
     redis:
       condition: service_healthy
   environment:
-    - REDIS_HOST=redis
+    - REDIS_HOST=10.100.0.10
     - REDIS_PORT=6379
 
 x-interpreter-worker: &interpreter-worker
@@ -78,8 +80,9 @@ services:
     ports:
       - "127.0.0.1:6379:6379"
     networks:
-      - softgate-backend
-      - softgate-workers
+      softgate-backend:
+      softgate-workers:
+        ipv4_address: 10.100.0.10
     security_opt:
       - no-new-privileges:true
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
@@ -174,7 +177,7 @@ services:
     build: ./workers/golang
     user: "1000:1000"
     environment:
-      - REDIS_HOST=redis
+      - REDIS_HOST=10.100.0.10
       - REDIS_PORT=6379
       - GOCACHE=/tmp/gocache
       - GOPATH=/tmp/gopath
@@ -239,6 +242,9 @@ networks:
   softgate-workers:
     driver: bridge
     internal: true
+    ipam:
+      config:
+        - subnet: 10.100.0.0/24
 
 volumes:
   postgres_data:
